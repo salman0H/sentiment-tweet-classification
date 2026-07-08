@@ -1,0 +1,11 @@
+# Installed separately from requirements.txt on purpose: torch is a large,
+# slow download (500MB+, more if CUDA wheels are pulled in), and bundling
+# it with the rest of the dependencies means one flaky download can abort
+# the installation of everything else.
+#
+# GPU machine (NVIDIA CUDA available):
+#   pip install --timeout 1000 torch>=2.2
+#
+# CPU-only machine (most laptops):
+#   pip install --timeout 1000 --index-url https://download.pytorch.org/whl/cpu torch>=2.2
+torch>=2.2

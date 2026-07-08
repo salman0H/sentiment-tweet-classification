@@ -1,0 +1,20 @@
+name: bert_frozen_encoder
+model_key: bert
+freeze_encoder: true
+max_length: 64
+optimizer: adamw
+learning_rate: 2e-3
+weight_decay: 0.01
+epochs: 5
+train_batch_size: 32
+eval_batch_size: 64
+warmup_ratio: 0.06
+preprocessing:
+  fix_literal_unicode_escapes: true
+  unescape_literal_quotes: true
+  strip_wrapping_quotes: true
+  normalize_whitespace: true
+  replace_user_mentions: false
+  strip_urls: false
+  lowercase: false
+  collapse_repeated_chars: false
