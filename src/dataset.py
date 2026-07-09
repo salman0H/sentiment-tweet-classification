@@ -1,37 +1,42 @@
-"""Torch Dataset wrapping pre-tokenized tweets for batched training."""
+"""Torch Dataset wrapping pre-tokenized tweets for batched training.
+
+Tokenization happens once, eagerly, in a single batched call to the fast
+tokenizer instead of once per sample per epoch. The same text is tokenized
+identically every time (truncation/max_length are deterministic), so
+retokenizing it on every `__getitem__` across every epoch and every
+evaluation pass is pure wasted CPU that would otherwise overlap with GPU
+compute -- this matters most on runs with many epochs/experiments where the
+retokenization cost is paid over and over for no benefit.
+"""
 
 from __future__ import annotations
 
 from typing import List
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
 
 class TweetDataset(Dataset):
-    """Tokenizes lazily and pads dynamically via the collate function below,
-    so a single dataset instance can be reused across max-length experiments
-    just by pointing it at a different tokenizer/max_length pair.
-    """
-
     def __init__(self, texts: List[str], labels: List[int], tokenizer, max_length: int):
-        self.texts = texts
         self.labels = labels
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-    def __len__(self) -> int:
-        return len(self.texts)
-
-    def __getitem__(self, idx: int):
-        encoding = self.tokenizer(
-            self.texts[idx],
+        # A single batched call lets the Rust fast-tokenizer parallelize
+        # internally, which is both faster and avoids the per-item Python
+        # call overhead of tokenizing one tweet at a time.
+        self._encodings = tokenizer(
+            texts,
             truncation=True,
-            max_length=self.max_length,
+            max_length=max_length,
             return_tensors=None,
         )
-        encoding["labels"] = self.labels[idx]
-        return encoding
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, idx: int):
+        item = {key: values[idx] for key, values in self._encodings.items()}
+        item["labels"] = self.labels[idx]
+        return item
 
 
 def make_collate_fn(tokenizer):
@@ -50,3 +55,28 @@ def make_collate_fn(tokenizer):
         return padded
 
     return collate
+
+
+def make_dataloader(
+    dataset: Dataset,
+    batch_size: int,
+    shuffle: bool,
+    collate_fn,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+) -> DataLoader:
+    """Centralizes DataLoader construction so num_workers/pin_memory are
+    applied consistently everywhere a loader is built. Worker processes are
+    only worth keeping alive (`persistent_workers`) when there is more than
+    one epoch to amortize their startup cost over, and only when
+    num_workers > 0 in the first place.
+    """
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        collate_fn=collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=num_workers > 0,
+    )

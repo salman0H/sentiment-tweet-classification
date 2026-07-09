@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -44,6 +45,18 @@ class ExperimentConfig:
     max_grad_norm: float = 1.0
     mixed_precision: bool = True      # automatic mixed precision (GPU only, ignored on CPU)
 
+    # Stop an experiment once dev F1 hasn't improved for this many
+    # consecutive epochs (the checkpoint that gets saved is still the best
+    # one seen, so this changes wall-clock time, not the reported metric).
+    # None disables early stopping and always runs the full `epochs` count.
+    early_stopping_patience: Optional[int] = 2
+
+    # DataLoader worker processes for collate work. 0 keeps everything on
+    # the main process (safest default on constrained machines); a small
+    # positive number lets CPU-side batch preparation overlap with GPU
+    # compute.
+    dataloader_num_workers: int = 2
+
     # hardware monitoring
     monitor_hardware: bool = True
     monitor_interval_seconds: float = 1.0
@@ -67,13 +80,28 @@ class ExperimentConfig:
     @classmethod
     def from_yaml(cls, path: str | Path) -> "ExperimentConfig":
         raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-        raw["preprocessing"] = PreprocessingConfig(**raw.get("preprocessing", {}))
         # PyYAML reads unquoted values like "2e-5" as strings, not floats,
         # because they are missing a decimal point. Cast explicitly so a
         # config author doesn't have to remember to write "2.0e-5" instead.
         for field_name in cls._FLOAT_FIELDS:
             if field_name in raw:
                 raw[field_name] = float(raw[field_name])
+        return cls.from_dict(raw)
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "ExperimentConfig":
+        """Build a config from a plain dict, e.g. one loaded back from a
+        previously written `config.json` (used by scripts/final_report.py
+        to reconstruct exactly the config a checkpoint was trained with).
+        `preprocessing` needs to be turned back into a `PreprocessingConfig`
+        instance since JSON/YAML only round-trip plain dicts.
+        """
+        raw = dict(raw)
+        preprocessing = raw.get("preprocessing") or {}
+        if isinstance(preprocessing, PreprocessingConfig):
+            raw["preprocessing"] = preprocessing
+        else:
+            raw["preprocessing"] = PreprocessingConfig(**preprocessing)
         return cls(**raw)
 
     def to_dict(self) -> dict:

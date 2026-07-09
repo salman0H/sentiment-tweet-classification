@@ -17,9 +17,16 @@ ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "results"
 
 
-def main() -> None:
+def build_comparison_table(results_dir: Path = RESULTS_DIR):
+    """Collect every completed experiment's dev metrics into one sorted
+    DataFrame. Returns None if no experiment has finished yet. Pulled out
+    of main() so scripts/run_all.py can call it directly after a batch of
+    experiments instead of shelling out to this script.
+    """
     rows = []
-    for experiment_dir in sorted(RESULTS_DIR.iterdir()):
+    for experiment_dir in sorted(results_dir.iterdir()):
+        if not experiment_dir.is_dir() or experiment_dir.name.startswith("_"):
+            continue
         metrics_path = experiment_dir / "dev_metrics.json"
         config_path = experiment_dir / "config.json"
         if not metrics_path.exists() or not config_path.exists():
@@ -54,14 +61,26 @@ def main() -> None:
         rows.append(row)
 
     if not rows:
+        return None
+
+    return pd.DataFrame(rows).sort_values("f1", ascending=False).reset_index(drop=True)
+
+
+def write_comparison_table(results_dir: Path = RESULTS_DIR):
+    df = build_comparison_table(results_dir)
+    if df is None:
+        return None
+    df.to_csv(results_dir / "comparison_table.csv", index=False)
+    (results_dir / "comparison_table.md").write_text(df.to_markdown(index=False), encoding="utf-8")
+    return df
+
+
+def main() -> None:
+    df = write_comparison_table()
+    if df is None:
         print("No completed experiments found under results/.")
         return
-
-    df = pd.DataFrame(rows).sort_values("f1", ascending=False).reset_index(drop=True)
     print(df.to_string(index=False))
-
-    df.to_csv(RESULTS_DIR / "comparison_table.csv", index=False)
-    (RESULTS_DIR / "comparison_table.md").write_text(df.to_markdown(index=False), encoding="utf-8")
     print(f"\nSaved to {RESULTS_DIR / 'comparison_table.csv'} and comparison_table.md")
 
 

@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
-data/splits.json
-results/*/
-!results/.gitkeep
 .venv/
+.venv_verify/
+logs/
+results/
+!results/.gitkeep

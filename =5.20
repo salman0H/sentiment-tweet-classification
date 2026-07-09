@@ -1,0 +1,3 @@
+Requirement already satisfied: plotly in ./.venv/lib/python3.12/site-packages (6.8.0)
+Requirement already satisfied: narwhals>=1.15.1 in ./.venv/lib/python3.12/site-packages (from plotly) (2.23.0)
+Requirement already satisfied: packaging in ./.venv/lib/python3.12/site-packages (from plotly) (26.2)

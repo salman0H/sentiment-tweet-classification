@@ -6,8 +6,8 @@ optimizer: adamw
 learning_rate: 1e-5
 weight_decay: 0.01
 epochs: 3
-train_batch_size: 32
-eval_batch_size: 64
+train_batch_size: 8
+eval_batch_size: 16
 warmup_ratio: 0.06
 preprocessing:
   fix_literal_unicode_escapes: true
